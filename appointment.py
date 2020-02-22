@@ -46,7 +46,7 @@ class appointment(object):
                 'yzm':''
                 }
             ]
-            截止2020-02-22，数据已不全，还需添加“taken”项
+            截止2020-02-22，数据已不全，还需添加“token”项
         '''
 
         pl = []
