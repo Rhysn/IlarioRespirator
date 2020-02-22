@@ -3,6 +3,7 @@
 __name__ = 'httpheader'
 
 def conn_header():
+    #提交预约使用的头部信息
     header = {
         'Accept':'*/*',
         'Accept-Encoding':'gzip, deflate',
@@ -20,6 +21,7 @@ def conn_header():
     return header
 
 def pic_header():
+    #下载验证码使用的头部信息，cookies部分会实时更换
     header = {
         "Accept": "image/png,image/svg+xml,image/*;q=0.8,video/*;q=0.8,*/*;q=0.5", 
         "Accept-Encoding": "gzip, deflate", 
@@ -34,6 +36,7 @@ def pic_header():
     return header
 
 def default_header():
+    #用以获取cookies所使用的头部信息
     header = {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", 
         "Accept-Encoding": "gzip, deflate", 

@@ -14,6 +14,7 @@ class peopleinfolist():
         self.phonel = []
         self.peoil = []
 
+        #创建多线程，完成身份证、手机号、姓名、预约门店信息的随机生成且不重复
         tid = threading.Thread(target=self._getid, args=())
         tname = threading.Thread(target=self._getname, args=())
         tshop = threading.Thread(target=self._getshop, args=())
@@ -33,6 +34,10 @@ class peopleinfolist():
 
 
     def _getid(self):
+        '''
+            生成随机身份证号码，不考虑不同月份天数不同的影响；
+            只随机日期在28以内的
+        '''
         placenums = ['130102','130104','130105','130107','130108','130109','130110']
         weight = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
         cheack_code = {'0': '1','1': '0','2': 'X','3': '9','4': '8','5': '7','6': '6','7': '5','8': '4','9': '3','10': '2'}
@@ -61,6 +66,7 @@ class peopleinfolist():
         self.idl = list(ids)
 		
     def _getname(self):
+        #随机生成人员姓名
         firstnames = [
                         '张','白','林','杨','刘','梁','苏','石','赛','尚','丁','董','王',
                         '戴','段','方','范','冯','高','郭','许','徐','聂','黄','赵','周',
@@ -106,6 +112,7 @@ class peopleinfolist():
         self.namel = list(names)
 		
     def _getphone(self):
+        #生成手机号
         phsegment = [
                         '136','139','151','133','156','155','130','177','173','172','188','178','132',
                         '180','150','189','185','186','137','159','131'
@@ -118,6 +125,9 @@ class peopleinfolist():
         self.phonel = list(phones)
 
     def _getshop(self):
+        '''
+            随机生成门店及区域信息，信息不全
+        '''
         shops = [
                 {"shopid":"15","areaid":"3"},{"shopid":"18","areaid":"15"},{"shopid":"20","areaid":"15"},
                 {"shopid":"23","areaid":"15"},{"shopid":"36","areaid":"15"},{"shopid":"37","areaid":"15"},
@@ -130,6 +140,9 @@ class peopleinfolist():
             self.pl.append(random.choice(shops)) 
 
     def _makepeopleinfolist(self):
+        '''
+            使用所生成的随机数据创建人员信息列表
+        '''
 
         for index, item in enumerate(self.pl):
             item['phone'] = self.phonel[index]
