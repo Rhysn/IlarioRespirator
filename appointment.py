@@ -1,15 +1,15 @@
-#!/bin/python
+#!/bin/python3
 # -*- coding:utf-8 -*-
 
 
 import data.basedata as basedata,data.peopleinfolist as pl
 import httpdata.urlinfo as urlinfo, httpdata.httpheader as httpheader
-import threading,multiprocessing
-import requests
-import datetime,time
-import random
-import pytesseract
+import threading, multiprocessing, requests, datetime, time, random
 from PIL import Image
+import re as are
+import cnn.c_cnn as cnn
+import numpy as np
+import tensorflow as tf
 
 class appointment(object):
 
@@ -29,6 +29,10 @@ class appointment(object):
         self.procnum = int(cpu / 2 + 1) 
         self.plist = self.formatlist(plist, ptime)
         self.rlist = self.formatrlist(plist)
+
+        self.model = cnn.captcha_cnn()
+        self.model.load_weights('./cnn/kears_cnn/captcha_cnn_best.h5')
+        self.char_set = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
     def formatlist(self, plist, ptime):
         '''
@@ -53,7 +57,7 @@ class appointment(object):
         temppl = []
         #获取明日预约日期
         date = datetime.date.today() + datetime.timedelta(days=1)
-        appodate = date.strftime("%Y-%m-%d")
+        appodate = date.strftime('%Y-%m-%d')
 
         #填充预约时段外的全部信息
         for item in plist:
@@ -66,7 +70,8 @@ class appointment(object):
                 'pickdate':appodate,
                 'shuliang':'5',
                 'pid':'1',
-                'yzm':''
+                'yzm':'',
+                'token':''
             }
             temppl.append(appo_info)
         #填充预约时段信息，保证每人可尝试预约当天全部时段
@@ -123,11 +128,12 @@ class appointment(object):
         for item in info:
             try:
                 #获取header信息，用以获取验证码、提交预约申请，cookies实时更新
-                header = self._getheader(head)
+                header, token = self._getheaderandtoken(head)
                 #获取验证码图片
-                picfile = self._getpicture(header['pic_header'], item['phone'])
+                picpath = self._getpicture(header['pic_header'], item['phone'])
                 #识别验证码，填充数据
-                item['yzm'] = str(self._getvcode(picfile))
+                item['yzm'] = str(self._getvcode(picpath))
+                item['token'] = token
                 re = requests.post(url,data=item.copy(),headers=header['pic_header'])
                 print(re.json())
             except ConnectionResetError:
@@ -143,7 +149,7 @@ class appointment(object):
         with open('./result/result.txt' ,'w') as f:
             for item in self.rlist:
                 re = requests.post(self.result_url,data=item,headers=self.header)
-                f.write(str(re.json())+"\n")
+                f.write(str(re.json())+'\n')
         f.close()
 
     def formatrlist(self, plist):
@@ -162,9 +168,9 @@ class appointment(object):
 
         return pl
 
-    def _getcookies(self):
+    def _getcookiesandtoken(self):
         '''
-            访问服务器，获取cookies
+            获取cookies及token
             后续使用此cookies获取验证码
         '''
         try:
@@ -172,20 +178,23 @@ class appointment(object):
             while not (re.status_code == 200):
                 try:
                     re = requests.get(url=self.form_url)
+                    pattern = are.compile(r"var token = \S+';")
+                    token = pattern.search(re.text)
+                    token = token.group(0).split("'")
                 except :
                     print(EnvironmentError)
         finally:
-            return requests.utils.dict_from_cookiejar(re.cookies)
+            return requests.utils.dict_from_cookiejar(re.cookies), token
 
-    def _getheader(self, header):
+    def _getheaderandtoken(self, header):
         '''
             完善header信息
         '''
-        cookies = self._getcookies()
+        cookies, token = self._getcookiesandtoken()
         for key in cookies:
             header['header']['cookies'] = key + '=' + cookies[key]
             header['pic_header']['cookies'] = key + '=' + cookies[key]
-        return header
+        return header, token
 
     def _getpicture(self, header, fn):
         '''
@@ -200,20 +209,34 @@ class appointment(object):
                     print(EnvironmentError)                
         finally:
             picfile = r'./data/pictemp/' + fn + r'.png'
-            with open(picfile, "wb") as f:
+            with open(picfile, 'wb') as f:
                 f.write(re.content) 
         return picfile
 
-    def _getvcode(self, filename):
+    def _getvcode(self, picpath):
         '''
             处理验证码图片，并识别验证码
+            cnn模型训练程度极低，999条基础数据
         '''
-        fi = Image.open(filename)
-        im = fi.convert('L')
-        img = im.point(lambda x:255 if x > 128 else 0)
-        res = pytesseract.image_to_string(img)
+        data_x = np.zeros((1, 25, 80, 3))
+        x = tf.io.read_file(picpath)        
+        x = tf.image.decode_png(x, channels=3)
+        x = tf.image.convert_image_dtype(x, tf.float64)             
+        x /= 255.
+        x = tf.reshape(x, (25, 80, 3))
+
+        data_x[0, :] = x
+        prediction_value = self.model.predict(data_x)
+        res = self.vec2text(np.argmax(prediction_value, axis=2))
 
         return res
+
+    def vec2text(self, vec):
+        text = []
+        for item in vec:
+            index = item[0]
+            text.append(self.char_set[index])
+        return ''.join(text)
 
 
 
@@ -221,15 +244,15 @@ class appointment(object):
 
 def apporun():
     url = {
-        "appointment" : urlinfo.get_appointmenturl(),
-        "result" : urlinfo.get_searchurl(),
-        "picture" : urlinfo.get_picurl(),
-        "form" : urlinfo.get_formurl()
+        'appointment' : urlinfo.get_appointmenturl(),
+        'result' : urlinfo.get_searchurl(),
+        'picture' : urlinfo.get_picurl(),
+        'form' : urlinfo.get_formurl()
     }
 
     httpheaders = {
-        "http_header" : httpheader.conn_header(),
-        "pic_header" : httpheader.pic_header()
+        'http_header' : httpheader.conn_header(),
+        'pic_header' : httpheader.pic_header()
     }
 
     #随机创建50人的个人信息，包括身份证号、手机号、姓名
@@ -240,8 +263,8 @@ def apporun():
     appo = appointment(url, httpheaders, plist, ptime)
 
     #设计停止预约时间标志
-    date = str(datetime.date.today().strftime("%Y-%m-%d")) + ' 19:45:30'
-    temptime = time.strptime(date, "%Y-%m-%d %H:%M:%S")
+    date = str(datetime.date.today().strftime('%Y-%m-%d')) + ' 19:45:30'
+    temptime = time.strptime(date, '%Y-%m-%d %H:%M:%S')
     keytime = time.mktime(temptime)
 
     #使用时间戳为名保存所创建的身份信息，方便后续查询预约结果
@@ -249,7 +272,7 @@ def apporun():
     fileadd = r'./data/infolist/' + str(nowtime) + r'_plist.txt'
     with open(fileadd ,'w') as f:
         for item in plist:           
-            f.write(str(item)+"\n")
+            f.write(str(item)+'\n')
     f.close()
 
     while True:
@@ -260,7 +283,7 @@ def apporun():
         
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     apporun()
 
